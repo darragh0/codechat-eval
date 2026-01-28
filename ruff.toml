@@ -1,0 +1,64 @@
+line-length = 120
+indent-width = 4
+extend-include = ["*.ipynb"]
+extend-exclude = [
+  ".vscode",
+  ".idea",
+  "__pycache__",
+  ".python-version",
+  ".ruff.toml",
+  "ruff.toml",
+  "setup.cfg",
+  "pyproject.toml",
+]
+
+[format]
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = 120
+
+[lint]
+extend-select = ["ALL"]
+extend-ignore = [
+  "T201",
+  "COM812",
+  "D100",
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "D105",
+  "D105",
+  "D107",
+  "D202",
+  "D400",
+  "D415",
+  "S101",
+]
+
+[lint.pylint]
+# Max args for function/method
+max-args = 20
+# Max boolean expressions in if statement
+max-bool-expr = 10
+# Max branches for function/method body
+max-branches = 100
+# Max locals for function/method body
+max-locals = 15
+# Max nested blocks for function/method body
+max-nested-blocks = 5
+# Max pos args for a function/method definition
+max-positional-args = 10
+# Max public methods for class (see R0904).
+max-public-methods = 30
+# Max return statements allowed for function/method body
+max-returns = 10
+# Max statements in function/method body
+max-statements = 1000
+
+[lint.pydocstyle]
+convention = "pep257"
+
+[lint.mccabe]
+max-complexity = 10

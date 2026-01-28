@@ -1,0 +1,23 @@
+[project]
+name = "codechat-eval"
+version = "0.1.0"
+description = "Qualitative analysis of prompt-code pairs from CodeChat-V2.0 dataset"
+readme = "README.md"
+authors = [{ name = "darragh0" }]
+license = "MIT"
+keywords = ["evaluation", "vibe-coding", "codechat", "llm"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+requires-python = ">=3.13"
+dependencies = [
+  "annotated-types>=0.7.0",
+  "datasets>=4.5.0",
+  "langdetect>=1.0.9",
+  "rich>=14.3.1",
+]
+
+[dependency-groups]
+dev = ["deptry>=0.24.0", "mypy>=1.19.1", "ruff>=0.14.14"]
