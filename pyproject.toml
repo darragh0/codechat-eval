@@ -19,5 +19,10 @@ dependencies = [
   "rich>=14.3.1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/darragh0/codechat-eval?tab=readme-ov-file#"
+Repository = "https://github.com/darragh0/codechat-eval"
+Documentation = "https://github.com/darragh0/codechat-eval?tab=readme-ov-file#"
+
 [dependency-groups]
 dev = ["deptry>=0.24.0", "mypy>=1.19.1", "ruff>=0.14.14"]
