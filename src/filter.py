@@ -4,30 +4,31 @@ from __future__ import annotations
 
 import hashlib
 import re
-import time
-from pathlib import Path
-from typing import TYPE_CHECKING, Final, cast
+from typing import TYPE_CHECKING, cast
 
+import pandas as pd
 from datasets import Dataset
 from langdetect import LangDetectException, detect
-from rich.rule import Rule
 
+from utils.cache import CACHE_DIR, parquet_cache
 from utils.console import cout
-from utils.ds import rows_as, show_ds_overview
+from utils.display import section_header, show_df_overview
+from utils.progress import tracked
 from utils.types import DSRow
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from typing import Literal
+
+    from datasets import Dataset
 
     from utils.types import FilteredDSRow
 
-CACHE_DIR: Final = Path("data")
 
-
-def _cache_key(*, only_english: bool, langs: tuple[str, ...] | Literal["*"]) -> str:
-    """Generate a short hash key from filter arguments."""
-    canonical = f"{only_english}|{langs}"
-    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
+def _rows_as[T](ds: Dataset, _: type[T], /) -> Iterator[T]:
+    """Cast dataset rows to type `T`."""
+    for r in ds:
+        yield cast("T", r)
 
 
 def _extract_code_blocks(md: str, /, langs: tuple[str, ...] | Literal["*"]) -> list[str]:
@@ -87,43 +88,27 @@ def _process_row(row: DSRow, /, *, only_english: bool, langs: tuple[str, ...] | 
     }
 
 
-def _format_eta(seconds: float) -> str:
-    """Format seconds as human-readable time remaining."""
-    if seconds < 60:  # noqa: PLR2004
-        return f"{seconds:.0f}s"
-    minutes, secs = divmod(int(seconds), 60)
-    if minutes < 60:  # noqa: PLR2004
-        return f"{minutes}m {secs:02d}s"
-    hours, mins = divmod(minutes, 60)
-    return f"{hours}h {mins:02d}m"
-
-
 def _filter_rows(
     ds: Dataset,
     /,
     *,
     only_english: bool,
     langs: tuple[str, ...] | Literal["*"],
-) -> list[FilteredDSRow]:
+) -> pd.DataFrame:
     """Filter all rows in the dataset with progress tracking."""
     records: list[FilteredDSRow] = []
-    total = len(ds)
-    start_time = time.monotonic()
-    status_update_interval = 100
 
-    with cout.status("[bold green]Filtering...", spinner="flip") as status:
-        for i, row in enumerate(rows_as(ds, DSRow)):
-            if record := _process_row(row, only_english=only_english, langs=langs):
-                records.append(record)
+    for _, row in tracked(_rows_as(ds, DSRow), "Filtering", total=len(ds), update_every=100):
+        if record := _process_row(row, only_english=only_english, langs=langs):
+            records.append(record)
 
-            if i % status_update_interval == 0 and i > 0:
-                elapsed = time.monotonic() - start_time
-                rate = i / elapsed
-                remaining = (total - i) / rate
-                eta = _format_eta(remaining)
-                status.update(f"[bold green]Filtering... {i:,}/{total:,} ({len(records):,} kept) [dim]ETA: {eta}[/]")
+    return pd.DataFrame(records)
 
-    return records
+
+def _cache_key(*, only_english: bool, langs: tuple[str, ...] | Literal["*"]) -> str:
+    """Generate a short hash key from filter arguments."""
+    canonical = f"{only_english}|{sorted(langs)}"
+    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
 
 
 def filter_ds(
@@ -133,8 +118,8 @@ def filter_ds(
     only_english: bool,
     langs: tuple[str, ...] | Literal["*"],
     overview: bool = False,
-) -> Dataset:
-    """Filter dataset and return as Dataset. Uses cache if available.
+) -> tuple[str, pd.DataFrame]:
+    """Filter dataset and return as DataFrame. Uses cache if available.
 
     Keyword Args:
         only_english: Filter out non-English conversations
@@ -143,32 +128,22 @@ def filter_ds(
         overview: Show dataset overview
     """
 
-    cout(Rule("[dim]Filtering[/]", style="dim"))
-    cout()
+    section_header("Filtering")
+
+    cout("[dim]Filtering single-turn conversations with options:[/]")
+    cout(f"  * {only_english = }")
+    cout(f"  * langs = {', '.join(repr(lang) for lang in langs)}\n")
 
     cache_key = _cache_key(only_english=only_english, langs=langs)
     cache_path = CACHE_DIR / f"filtered_{cache_key}.parquet"
 
-    if cache_path.exists():
-        loaded = Dataset.from_parquet(str(cache_path))
-        assert isinstance(loaded, Dataset)
-        filtered_ds = loaded
-        cout(f"[dim]Loaded from cache:[/] {len(filtered_ds):,} samples")
+    df = parquet_cache(
+        cache_path,
+        lambda: _filter_rows(ds, only_english=only_english, langs=langs),
+    )
 
-    else:
-        records = _filter_rows(ds, only_english=only_english, langs=langs)
-        filtered_ds = Dataset.from_list(cast("list[dict]", records))
-
-        # Save cache
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        filtered_ds.to_parquet(cache_path)
-        cout(f"[dim]Cached:[/] {cache_path} ({cache_path.stat().st_size / 1024 / 1024:.1f} MB)\n")
-
-    cout(f"[dim]Filtered:[/] {len(filtered_ds):,}/{len(ds):,} conversations ({100 * len(filtered_ds) / len(ds):.1f}%)")
-
+    cout(f"[dim]Filtered:[/] {len(df):,}/{len(ds):,} conversations ({100 * len(df) / len(ds):.1f}%)")
     if overview:
-        from ds import DS_NAME  # noqa: PLC0415
+        show_df_overview(df)
 
-        show_ds_overview(filtered_ds, ds_name=f"{DS_NAME} (filtered)")
-
-    return filtered_ds
+    return cache_key, df

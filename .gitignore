@@ -10,7 +10,10 @@ wheels/
 .venv
 
 # Data
-src/data
+data/
 
 # Misc
 plan.md
+ideas.md
+agenda.md
+notes.md
