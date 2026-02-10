@@ -19,7 +19,7 @@ def maxlen(items: Iterable[Sized], /) -> int:
 
 def show_df_overview(df: DataFrame, /) -> None:
     """Show DataFrame overview."""
-    cout("\n[bold]DataFrame Info:[/]")
+    cout("\n[dim]DataFrame Info[/]")
     cout(f"  Shape: {df.shape}")
     cout(f"  Models: {df['model'].nunique()} unique")
     cout("  Columns:")
@@ -35,7 +35,7 @@ def section_header(title: str) -> None:
     """Print a styled section header."""
 
     cout()
-    cout(Rule(f"[dim]{title}[/]", style="dim"))
+    cout(Rule(title, style="bold"))
     cout()
 
 

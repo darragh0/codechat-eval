@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import TYPE_CHECKING, cast
 
@@ -18,11 +17,12 @@ from utils.types import DSRow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from typing import Literal
 
     from datasets import Dataset
 
     from utils.types import FilteredDSRow
+
+LANGS = ("python", "py")
 
 
 def _rows_as[T](ds: Dataset, _: type[T], /) -> Iterator[T]:
@@ -31,9 +31,9 @@ def _rows_as[T](ds: Dataset, _: type[T], /) -> Iterator[T]:
         yield cast("T", r)
 
 
-def _extract_code_blocks(md: str, /, langs: tuple[str, ...] | Literal["*"]) -> list[str]:
-    """Extract all code blocks (for the given language) from markdown."""
-    pattern = r"```\w*\n(.*?)```" if langs == "*" else rf"```(?:{'|'.join(langs)})\n(.*?)```"
+def _extract_code_blocks(md: str, /) -> list[str]:
+    """Extract all code blocks (for Python) from markdown."""
+    pattern = rf"```(?:{'|'.join(LANGS)})\n(.*?)```"
     return re.findall(pattern, md, re.DOTALL | re.IGNORECASE)
 
 
@@ -51,9 +51,8 @@ def _is_english(text: str, /) -> bool:
         return False  # Skip on undetectable
 
 
-def _process_row(row: DSRow, /, *, only_english: bool, langs: tuple[str, ...] | Literal["*"]) -> FilteredDSRow | None:
+def _process_row(row: DSRow, /) -> FilteredDSRow | None:
     """Process a single row. Returns filtered record or None."""
-    # Get first turn (user + assistant message pair)
     conversation = row["conversation"]
     if not conversation or len(conversation[0]) < 2:  # noqa: PLR2004
         return None
@@ -65,14 +64,10 @@ def _process_row(row: DSRow, /, *, only_english: bool, langs: tuple[str, ...] | 
     if user_msg["role"] != "user" or asst_msg["role"] != "assistant" or not prompt or not response:
         return None
 
-    if only_english and (
-        user_msg["language"] != "English"  # Metadata pre-filter
-        or not _is_english(prompt)  # Verify with actual detection
-    ):
+    if user_msg["language"] != "English" or not _is_english(prompt):
         return None
 
-    # Extract non-trivial code blocks
-    code_blocks = _extract_code_blocks(response, langs=langs)
+    code_blocks = _extract_code_blocks(response)
     if not code_blocks:
         return None
 
@@ -88,62 +83,29 @@ def _process_row(row: DSRow, /, *, only_english: bool, langs: tuple[str, ...] | 
     }
 
 
-def _filter_rows(
-    ds: Dataset,
-    /,
-    *,
-    only_english: bool,
-    langs: tuple[str, ...] | Literal["*"],
-) -> pd.DataFrame:
+def _filter_rows(ds: Dataset, /) -> pd.DataFrame:
     """Filter all rows in the dataset with progress tracking."""
     records: list[FilteredDSRow] = []
 
     for _, row in tracked(_rows_as(ds, DSRow), "Filtering", total=len(ds), update_every=100):
-        if record := _process_row(row, only_english=only_english, langs=langs):
+        if record := _process_row(row):
             records.append(record)
 
     return pd.DataFrame(records)
 
 
-def _cache_key(*, only_english: bool, langs: tuple[str, ...] | Literal["*"]) -> str:
-    """Generate a short hash key from filter arguments."""
-    canonical = f"{only_english}|{sorted(langs)}"
-    return hashlib.sha256(canonical.encode()).hexdigest()[:12]
-
-
-def filter_ds(
-    ds: Dataset,
-    /,
-    *,
-    only_english: bool,
-    langs: tuple[str, ...] | Literal["*"],
-    overview: bool = False,
-) -> tuple[str, pd.DataFrame]:
-    """Filter dataset and return as DataFrame. Uses cache if available.
-
-    Keyword Args:
-        only_english: Filter out non-English conversations
-        langs: Programming languages to extract code blocks for ("*" for all)
-    (Optional)
-        overview: Show dataset overview
-    """
-
+def filter_ds(ds: Dataset, /, *, overview: bool = False) -> pd.DataFrame:
+    """Filter dataset and return as DataFrame. Uses cache if available."""
     section_header("Filtering")
 
-    cout("[dim]Filtering single-turn conversations with options:[/]")
-    cout(f"  * {only_english = }")
-    cout(f"  * langs = {', '.join(repr(lang) for lang in langs)}\n")
+    cout("Filtering single-turn English conversations with Python code\n")
 
-    cache_key = _cache_key(only_english=only_english, langs=langs)
-    cache_path = CACHE_DIR / f"filtered_{cache_key}.parquet"
+    cache_path = CACHE_DIR / "filtered.parquet"
 
-    df = parquet_cache(
-        cache_path,
-        lambda: _filter_rows(ds, only_english=only_english, langs=langs),
-    )
+    df = parquet_cache(cache_path, lambda: _filter_rows(ds))
 
     cout(f"[dim]Filtered:[/] {len(df):,}/{len(ds):,} conversations ({100 * len(df) / len(ds):.1f}%)")
     if overview:
         show_df_overview(df)
 
-    return cache_key, df
+    return df

@@ -18,7 +18,6 @@ from radon.metrics import mi_visit
 from utils.cache import CACHE_DIR, parquet_cache
 from utils.console import cerr, cout
 from utils.display import section_header, show_df_overview
-from utils.progress import tracked
 from utils.types import SyntaxEval
 
 if TYPE_CHECKING:
@@ -133,9 +132,25 @@ def _analyse_row(code_blocks: list[str]) -> SyntaxEval:
     }
 
 
+def _process_syntax_row(row: FilteredDSRow) -> SyntaxEvalRow:
+    """Process a single row for syntax analysis."""
+    code_blocks = row["code"]
+    scores = _analyse_row(code_blocks)
+    combined = "\n\n# ===== CODEBLOCK =====\n\n".join(code_blocks)
+
+    return {
+        "id": row["id"],
+        "model": row["model"],
+        "prompt": row["prompt"],
+        "response": row["response"],
+        "code": combined,
+        **scores,
+    }
+
+
 def _print_overview(df: pd.DataFrame) -> None:
     """Print summary statistics for syntax analysis columns."""
-    cout("\n[bold]Syntax Analysis Summary:[/]")
+    cout("\n[bold]Syntax Analysis Summary[/]")
 
     for col in SyntaxEval.__annotations__:
         if col == "parseable":
@@ -147,46 +162,27 @@ def _print_overview(df: pd.DataFrame) -> None:
             cout(f"  {col:<20} mean={mean:05.2f}  median={med:05.2f}")
 
 
-def analyse_syntax(
-    df: pd.DataFrame,
-    /,
-    *,
-    cache_key: str,
-    overview: bool = False,
-) -> pd.DataFrame:
-    """Run syntactic analysis on each row's code blocks.
-
-    Keyword Args:
-        cache_key: Cache key to use (based on filtering args)
-    (Optional)
-        overview: Show summary statistics after analysis.
-    """
+def analyse_syntax(df: pd.DataFrame, /, *, overview: bool = False) -> pd.DataFrame:
+    """Run syntactic analysis on each row's code blocks."""
     section_header("Syntax Analysis")
 
-    def _compute() -> pd.DataFrame:
-        records: list[SyntaxEvalRow] = []
+    def compute() -> pd.DataFrame:
         rows = cast("list[FilteredDSRow]", df.to_dict("records"))
+        total = len(rows)
 
-        for _, row in tracked(rows, "Analysing syntax", total=len(rows)):
-            code_blocks = row["code"]
-            scores = _analyse_row(code_blocks)
-            combined = "\n\n# ===== CODEBLOCK =====\n\n".join(code_blocks)
+        records = parallel_map(
+            _process_syntax_row,
+            rows,
+            "Analysing syntax",
+            total=total,
+            max_workers=2,
+        )
 
-            records.append(
-                {
-                    "id": row["id"],
-                    "model": row["model"],
-                    "prompt": row["prompt"],
-                    "response": row["response"],
-                    "code": combined,
-                    **scores,
-                }
-            )
-
+        records.sort(key=lambda r: r["id"])
         return pd.DataFrame(records)
 
-    cache_path = CACHE_DIR / f"syntax_eval_{cache_key}.parquet"
-    result = parquet_cache(cache_path, _compute)
+    cache_path = CACHE_DIR / "syntax_eval.parquet"
+    result = parquet_cache(cache_path, compute)
 
     if overview:
         _print_overview(result)

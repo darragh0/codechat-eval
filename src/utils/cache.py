@@ -16,6 +16,12 @@ if TYPE_CHECKING:
 CACHE_DIR: Path = Path("data")
 
 
+def _show_cache_stats(df: pd.DataFrame, path: Path) -> None:
+    cout(f"  path: [magenta]{path}[/]")
+    cout(f"  size: {path.stat().st_size / 1024 / 1024:.1f} MB")
+    cout(f"  samples: {len(df):,}")
+
+
 def parquet_cache(
     path: Path,
     compute: Callable[[], pd.DataFrame],
@@ -24,12 +30,14 @@ def parquet_cache(
 
     if path.exists():
         df = pd.read_parquet(path)
-        cout(f"[dim]Loaded from cache:[/] [magenta]{path}[/] -> {len(df):,} samples")
+        cout("[dim]Loaded from cache:[/]")
+        _show_cache_stats(df, path)
         return df
 
     df = compute()
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(path)
-    cout(f"[dim]Cached:[/] {path} ({path.stat().st_size / 1024 / 1024:.1f} MB)")
+    cout("[dim]Cached:[/]")
+    _show_cache_stats(df, path)
 
     return df

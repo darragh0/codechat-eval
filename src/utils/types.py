@@ -40,6 +40,14 @@ class FilteredDSRow(TypedDict):
     code: list[str]
 
 
+class EvalRowBase(TypedDict):
+    id: str
+    model: str
+    prompt: str
+    response: str
+    code: str  # all blocks concatenated
+
+
 class SyntaxEval(TypedDict):
     parseable: bool  # all individual blocks parse via ast.parse
     lines: Uint  # total lines of code (all blocks combined)
@@ -52,16 +60,6 @@ class SyntaxEval(TypedDict):
     maintainability: Percent  # radon
 
 
-class SyntaxEvalRow(SyntaxEval):
-    """Row with syntactic evaluation scores."""
-
-    id: str
-    model: str
-    prompt: str
-    response: str
-    code: str  # all blocks concatenated
-
-
 class PromptSemEval(TypedDict):
     clarity: PromptSemScore
     specificity: PromptSemScore
@@ -72,3 +70,11 @@ class CodeSemEval(TypedDict):
     correctness: CodeSemScore
     robustness: CodeSemScore
     readability: CodeSemScore
+
+
+class SyntaxEvalRow(EvalRowBase, SyntaxEval):
+    """Row with syntactic evaluation scores."""
+
+
+class SemanticEvalRow(EvalRowBase, PromptSemEval, CodeSemEval):
+    """Row with semantic evaluation scores."""
