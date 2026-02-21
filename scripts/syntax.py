@@ -1,30 +1,34 @@
-"""Syntactic analysis of code blocks using ruff and radon."""
+#!/usr/bin/env python3
+
+"""Syntactic analysis of code blocks using ruff & radon."""
 
 from __future__ import annotations
 
 import ast
 import json
+import os
 import shutil
 import subprocess
 import tempfile
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import pandas as pd
 from radon.complexity import cc_visit
 from radon.metrics import mi_visit
-
 from utils.cache import CACHE_DIR, parquet_cache
 from utils.console import cerr, cout
-from utils.display import section_header, show_df_overview
+from utils.display import show_df_overview
+from utils.progress import tracked
 from utils.types import SyntaxEval
 
 if TYPE_CHECKING:
-    from utils.types import FilteredDSRow, SyntaxEvalRow
+    from scripts.utils.types import FilteredDSRow, SyntaxEvalRow
 
 
-def _check_parseable(blocks: list[str]) -> bool:
+def is_parseable(blocks: list[str]) -> bool:
     """Check if all code blocks parse via ast.parse."""
     for block in blocks:
         try:
@@ -36,7 +40,7 @@ def _check_parseable(blocks: list[str]) -> bool:
     return True
 
 
-def _run_ruff(code: str) -> dict[str, int]:
+def run_ruff(code: str) -> dict[str, int]:
     """Run ruff on code and return violation counts by category."""
     counts = {"errors": 0, "warnings": 0, "flake8": 0, "bugbear": 0, "security": 0}
 
@@ -87,7 +91,7 @@ def _run_ruff(code: str) -> dict[str, int]:
     return counts
 
 
-def _run_radon_complexity(code: str) -> float:
+def run_radon_complexity(code: str) -> float:
     """Return average cyclomatic complexity (0.0 if no functions/classes)."""
     try:
         with warnings.catch_warnings():
@@ -100,7 +104,7 @@ def _run_radon_complexity(code: str) -> float:
     return sum(b.complexity for b in blocks) / len(blocks)
 
 
-def _run_radon_mi(code: str) -> float:
+def run_radon_mi(code: str) -> float:
     """Return maintainability index (0-100, higher = more maintainable)."""
     try:
         with warnings.catch_warnings():
@@ -110,14 +114,14 @@ def _run_radon_mi(code: str) -> float:
         return 0.0
 
 
-def _analyse_row(code_blocks: list[str]) -> SyntaxEval:
+def analyse_row(code_blocks: list[str]) -> SyntaxEval:
     """Analyse code blocks and return flat score dict."""
-    parseable = _check_parseable(code_blocks)
+    parseable = is_parseable(code_blocks)
     combined = "\n\n# ===== CODEBLOCK =====\n\n".join(code_blocks)
 
-    ruff_counts = _run_ruff(combined)
-    complexity = _run_radon_complexity(combined)
-    maintainability = _run_radon_mi(combined)
+    ruff_counts = run_ruff(combined)
+    complexity = run_radon_complexity(combined)
+    maintainability = run_radon_mi(combined)
 
     return {
         "parseable": parseable,
@@ -132,10 +136,10 @@ def _analyse_row(code_blocks: list[str]) -> SyntaxEval:
     }
 
 
-def _process_syntax_row(row: FilteredDSRow) -> SyntaxEvalRow:
+def process_syntax_row(row: FilteredDSRow) -> SyntaxEvalRow:
     """Process a single row for syntax analysis."""
     code_blocks = row["code"]
-    scores = _analyse_row(code_blocks)
+    scores = analyse_row(code_blocks)
     combined = "\n\n# ===== CODEBLOCK =====\n\n".join(code_blocks)
 
     return {
@@ -148,9 +152,8 @@ def _process_syntax_row(row: FilteredDSRow) -> SyntaxEvalRow:
     }
 
 
-def _print_overview(df: pd.DataFrame) -> None:
-    """Print summary statistics for syntax analysis columns."""
-    cout("\n[bold]Syntax Analysis Summary[/]")
+def show_oview(df: pd.DataFrame) -> None:
+    cout("[bold]Syntax Analysis Summary[/]")
 
     for col in SyntaxEval.__annotations__:
         if col == "parseable":
@@ -162,21 +165,19 @@ def _print_overview(df: pd.DataFrame) -> None:
             cout(f"  {col:<20} mean={mean:05.2f}  median={med:05.2f}")
 
 
-def analyse_syntax(df: pd.DataFrame, /, *, overview: bool = False) -> pd.DataFrame:
+def analyse_syntax(df: pd.DataFrame, /) -> pd.DataFrame:
     """Run syntactic analysis on each row's code blocks."""
-    section_header("Syntax Analysis")
 
     def compute() -> pd.DataFrame:
         rows = cast("list[FilteredDSRow]", df.to_dict("records"))
-        total = len(rows)
+        max_workers = max((os.cpu_count() or 4) // 2, 1)
+        extra = f"\n  [bold green]>[/] [dim]{max_workers} workers[/]\n"
 
-        records = parallel_map(
-            _process_syntax_row,
-            rows,
-            "Analysing syntax",
-            total=total,
-            max_workers=2,
-        )
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(process_syntax_row, row) for row in rows]
+            records: list[SyntaxEvalRow] = []
+            for _, fut in tracked(futures, "Analysing syntax", total=len(rows), extra=extra):
+                records.append(fut.result())
 
         records.sort(key=lambda r: r["id"])
         return pd.DataFrame(records)
@@ -184,8 +185,24 @@ def analyse_syntax(df: pd.DataFrame, /, *, overview: bool = False) -> pd.DataFra
     cache_path = CACHE_DIR / "syntax_eval.parquet"
     result = parquet_cache(cache_path, compute)
 
-    if overview:
-        _print_overview(result)
-        show_df_overview(result)
+    show_oview(result)
+    show_df_overview(result)
 
     return result
+
+
+def main() -> None:
+    filtered_fname = "filtered.parquet"
+    cache_path = CACHE_DIR / filtered_fname
+    if not cache_path.exists():
+        cerr(f"run [cyan]filter.py[/] first -- missing [cyan]{filtered_fname}[/]")
+
+    df = pd.read_parquet(cache_path)
+    analyse_syntax(df)
+
+
+if __name__ == "__main__":
+    from utils.cache import graceful_exit
+
+    with graceful_exit("syntax analysis stopped"):
+        main()

@@ -1,7 +1,9 @@
+from collections.abc import Iterator
 from datetime import datetime as dt
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, TypedDict, cast
 
 from annotated_types import Ge, Le
+from datasets import Dataset
 
 Uint = Annotated[int, Ge(0)]
 Ufloat = Annotated[float, Ge(0.0)]
@@ -9,6 +11,12 @@ ChatRole = Literal["user", "assistant"]
 Percent = Annotated[float, Ge(0.0), Le(100.0)]
 PromptSemScore = Annotated[int, Ge(1), Le(5)]
 CodeSemScore = PromptSemScore
+
+
+def rows_as[T](ds: Dataset, _: type[T], /) -> Iterator[T]:
+    """Cast dataset rows to type `T`."""
+    for r in ds:
+        yield cast("T", r)
 
 
 class _ConversationMsg(TypedDict):
@@ -38,6 +46,7 @@ class FilteredDSRow(TypedDict):
     prompt: str
     response: str
     code: list[str]
+    prev_turn_id: str | None
 
 
 class EvalRowBase(TypedDict):
@@ -76,5 +85,5 @@ class SyntaxEvalRow(EvalRowBase, SyntaxEval):
     """Row with syntactic evaluation scores."""
 
 
-class SemanticEvalRow(EvalRowBase, PromptSemEval, CodeSemEval):
+class SemanticEvalRow(SyntaxEvalRow, PromptSemEval, CodeSemEval):
     """Row with semantic evaluation scores."""

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
-
-from rich.rule import Rule
 
 from .console import cout
 
@@ -12,6 +11,10 @@ if TYPE_CHECKING:
     from pandas import DataFrame
 
 
+def prettypath(path: Path, /) -> str:
+    return f"[magenta]{f'{path.resolve()}'.replace(str(Path.home()), '~', 1)}[/]"
+
+
 def maxlen(items: Iterable[Sized], /) -> int:
     """Return length of longest item in an iterable of sized objects."""
     return max(len(x) for x in items)
@@ -19,24 +22,16 @@ def maxlen(items: Iterable[Sized], /) -> int:
 
 def show_df_overview(df: DataFrame, /) -> None:
     """Show DataFrame overview."""
-    cout("\n[dim]DataFrame Info[/]")
-    cout(f"  Shape: {df.shape}")
-    cout(f"  Models: {df['model'].nunique()} unique")
-    cout("  Columns:")
+    cout("DataFrame Info")
+    cout(f"  [dim]Shape[/]   {df.shape}")
+    cout(f"  [dim]Models[/]  {df['model'].nunique()} unique")
+    cout("  [dim]Columns[/]")
 
     col_width = max(len(c) for c in df.columns)
     zpad = len(str(df.shape[1]))
 
     for i, col in enumerate(df.columns):
         cout(f"    {i:0{zpad}}  {col:<{col_width}}\t[cyan]{df[col].dtype}[/]")
-
-
-def section_header(title: str) -> None:
-    """Print a styled section header."""
-
-    cout()
-    cout(Rule(title, style="bold"))
-    cout()
 
 
 def fmt_eta(seconds: float) -> str:

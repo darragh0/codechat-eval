@@ -45,9 +45,11 @@ class _ErrConsole(Console):
         self,
         *objects: Any,  # noqa: ANN401
         exit_code: int | None = None,
+        prefix: str = "[bold red]error:[/]",
         **kwargs: Unpack[RichConsolePrintKwargs],
     ) -> None:
-        self.print("[bold red]error:[/]", *objects, **kwargs)
+        self.print(prefix, *objects, **kwargs)
+
         if exit_code is not None:
             sys.exit(exit_code)
 

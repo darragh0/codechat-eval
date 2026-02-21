@@ -1,20 +1,15 @@
-"""Semantic analysis of prompt-code pairs via Claude Batch API."""
+#!/usr/bin/env python3
+
+"""Semantic analysis of prompt-code pairs."""
 
 from __future__ import annotations
 
-import sys
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
 import pandas as pd
-from rich.prompt import Confirm
-
 from utils.cache import CACHE_DIR, parquet_cache
-from utils.console import cout
-from utils.display import section_header, show_df_overview
-
-if TYPE_CHECKING:
-    import pandas as pd
-
+from utils.console import cerr
+from utils.display import show_df_overview
 
 MODEL: Final = "claude-haiku-4-5-20251001"
 MAX_TOKENS: Final = 256
@@ -72,23 +67,33 @@ Respond with ONLY valid JSON, no other text:
 {"clarity":N,"specificity":N,"completeness":N,"correctness":N,"robustness":N,"readability":N}"""  # noqa: E501, RUF001
 
 
-def analyse_semantics(df: pd.DataFrame, /, *, overview: bool = False) -> pd.DataFrame:
+def analyse_semantics(df: pd.DataFrame, /) -> pd.DataFrame:
     """Run LLM-as-a-judge semantic analysis on each row after syntax analysis."""
-    section_header("Semantic Analysis")
 
     def compute() -> pd.DataFrame:
-        cout("[italic yellow]Are you sure you want to run semantic analysis?\nThis is a heavy/costly operation[/]\n")
-
-        if not Confirm.ask("proceed?"):
-            sys.exit(0)
-
         _ = df
         raise NotImplementedError
 
     cache_path = CACHE_DIR / "semantic_eval.parquet"
     result = parquet_cache(cache_path, compute)
 
-    if overview:
-        show_df_overview(result)
+    show_df_overview(result)
 
     return result
+
+
+def main() -> None:
+    syntax_fname = "syntax_eval.parquet"
+    cache_path = CACHE_DIR / syntax_fname
+    if not cache_path.exists():
+        cerr(f"run [cyan]syntax.py[/] first -- missing [cyan]{syntax_fname}[/]")
+
+    df = pd.read_parquet(cache_path)
+    analyse_semantics(df)
+
+
+if __name__ == "__main__":
+    from utils.cache import graceful_exit
+
+    with graceful_exit():
+        main()

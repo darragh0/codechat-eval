@@ -1,12 +1,20 @@
 # codechat-eval
 
-Analyzing the quality relationship between prompts and generated code.
+This repo analyses the quality of LLM-generated code in real-world developer conversations, using the [CodeChat-V2.0](https://huggingface.co/datasets/Suzhen/CodeChat-V2.0) dataset (587k conversations from [WildChat](https://huggingface.co/datasets/allenai/WildChat)).
 
-Based on the [CodeChat-V2.0](https://huggingface.co/datasets/Suzhen/CodeChat-V2.0) dataset.
+Here, we filter and augment the database with syntactic & semantic analysis findings.
 
-### License
+### Scripts
 
-This project is licensed under the [MIT License][license].
+> [!IMPORTANT]
+> Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/)
+
+| Script                | Description                                |
+| --------------------- | ------------------------------------------ |
+| `scripts/download.py` | Download the CodeChat-V2.0 dataset         |
+| `scripts/filter.py`   | Filter to English prompts with Python code |
+| `scripts/syntax.py`   | Syntactic analysis (ruff & radon)          |
+| `scripts/semantic.py` | Semantic analysis of prompt-code pairs     |
 
 ### Citation
 
@@ -22,12 +30,6 @@ This project is licensed under the [MIT License][license].
 }
 ```
 
-### Extra Info
+### License
 
-CodeChat-V2.0 is a large-scale dataset comprising 587,568 real-world developer–LLM conversations, derived from the [WildChat][wildchat] dataset.
-
-- Paper: <https://arxiv.org/abs/2509.10402>
-- GitHub: <https://github.com/Software-Evolution-Analytics-Lab-SEAL/CodeChat>
-
-[license]: https://github.com/darragh0/codechat-eval?tab=MIT-1-ov-file# "codechat-eval license"
-[wildchat]: https://huggingface.co/datasets/allenai/WildChat "wildchat dataset"
+[MIT](https://github.com/darragh0/codechat-eval?tab=MIT-1-ov-file)

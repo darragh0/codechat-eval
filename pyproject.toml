@@ -8,21 +8,16 @@ license = "MIT"
 keywords = ["evaluation", "vibe-coding", "codechat", "llm"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
 requires-python = ">=3.13"
 dependencies = [
   "annotated-types>=0.7.0",
-  "anthropic>=0.79.0",
   "datasets>=4.5.0",
-  "langdetect>=1.0.9",
-  "lingua-language-detector>=2.1.0",
+  "fasttext-predict>=0.9.2.4",
   "pandas>=2.0.0",
-  "pyarrow>=15.0.0",
   "radon>=6.0.0",
   "rich>=14.3.1",
-  "ruff>=0.14.14",
 ]
 
 [project.urls]
@@ -31,4 +26,4 @@ Repository = "https://github.com/darragh0/codechat-eval"
 Documentation = "https://github.com/darragh0/codechat-eval?tab=readme-ov-file#"
 
 [dependency-groups]
-dev = ["deptry>=0.24.0", "mypy>=1.19.1"]
+dev = ["deptry>=0.24.0", "mypy>=1.19.1", "ruff>=0.14.14", "typ>=0.11.0"]
