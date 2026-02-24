@@ -1,13 +1,15 @@
 # codechat-eval
 
-This repo analyses the quality of LLM-generated code in real-world developer conversations, using the [CodeChat-V2.0](https://huggingface.co/datasets/Suzhen/CodeChat-V2.0) dataset (587k conversations from [WildChat](https://huggingface.co/datasets/allenai/WildChat)).
+This repo evaluates the quality of LLM-generated code in real-world developer conversations, using the [CodeChat-V2.0](https://huggingface.co/datasets/Suzhen/CodeChat-V2.0) dataset (587k conversations from [WildChat](https://huggingface.co/datasets/allenai/WildChat)).
 
 Here, we filter and augment the database with syntactic & semantic analysis findings.
 
 ### Scripts
 
+
 > [!IMPORTANT]
-> Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/)
+> Requires Python 3.13+
+
 
 | Script                | Description                                |
 | --------------------- | ------------------------------------------ |
