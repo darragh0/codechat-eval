@@ -13,7 +13,4 @@ wheels/
 data/
 
 # Misc
-plan.md
-ideas.md
-agenda.md
-notes.md
+*.md

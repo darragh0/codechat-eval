@@ -50,10 +50,9 @@ def parquet_cache(
         _show_cache_stats(df, path)
         return df
 
-    with graceful_exit("caching stopped", cache_path=path):
-        df = compute()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(path)
+    df = compute()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path)
 
     cout("Cached:")
     _show_cache_stats(df, path)

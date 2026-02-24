@@ -46,7 +46,6 @@ class FilteredDSRow(TypedDict):
     prompt: str
     response: str
     code: list[str]
-    prev_turn_id: str | None
 
 
 class EvalRowBase(TypedDict):

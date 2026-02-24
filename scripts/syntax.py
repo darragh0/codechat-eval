@@ -153,16 +153,16 @@ def process_syntax_row(row: FilteredDSRow) -> SyntaxEvalRow:
 
 
 def show_oview(df: pd.DataFrame) -> None:
-    cout("[bold]Syntax Analysis Summary[/]")
+    cout("Syntax Analysis Summary:")
 
     for col in SyntaxEval.__annotations__:
         if col == "parseable":
             n_parseable = df[col].sum()
-            cout(f"  {col:<20} {n_parseable:,}/{len(df):,} ({100 * n_parseable / len(df):.1f}%)")
+            cout(f"  [dim]{col:<20}[/] {n_parseable:,}/{len(df):,} ({100 * n_parseable / len(df):.1f}%)")
         else:
             mean = df[col].mean()
             med = df[col].median()
-            cout(f"  {col:<20} mean={mean:05.2f}  median={med:05.2f}")
+            cout(f"  [dim]{col:<20}[/] mean={mean:05.2f}  median={med:05.2f}")
 
 
 def analyse_syntax(df: pd.DataFrame, /) -> pd.DataFrame:
@@ -184,9 +184,12 @@ def analyse_syntax(df: pd.DataFrame, /) -> pd.DataFrame:
 
     cache_path = CACHE_DIR / "syntax_eval.parquet"
     result = parquet_cache(cache_path, compute)
+    cout()
 
     show_oview(result)
+    cout()
     show_df_overview(result)
+    cout()
 
     return result
 

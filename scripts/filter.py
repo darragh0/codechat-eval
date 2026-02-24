@@ -60,41 +60,34 @@ def is_en(text: str, /) -> bool:
     return predictions[0][0] == "__label__en"  # type: ignore[reportGeneralTypeIssues]
 
 
-def process_conversation(row: DSRow, /) -> list[FilteredDSRow]:
-    """Process all turns in a conversation. Returns filtered records."""
-    records: list[FilteredDSRow] = []
-    prev_turn_id: str | None = None
+def process_conversation(row: DSRow, /) -> FilteredDSRow | None:
+    """Extract the first turn if it has English prompt + non-trivial code."""
 
-    for turn_idx, turn in enumerate(row["conversation"]):
-        if len(turn) < 2:  # noqa: PLR2004
-            break
+    conversation = row["conversation"]
+    if not conversation or len(conversation[0]) < 2:  # noqa: PLR2004
+        return None
 
-        user_msg, asst_msg = turn[:2]
-        prompt, response = user_msg["content"], asst_msg["content"]
+    turn = conversation[0]
+    user_msg, asst_msg = turn[:2]
+    prompt, response = user_msg["content"], asst_msg["content"]
 
-        if user_msg["role"] != "user" or asst_msg["role"] != "assistant" or not prompt or not response:
-            continue
+    if user_msg["role"] != "user" or asst_msg["role"] != "assistant" or not prompt or not response:
+        return None
 
-        # `user_msg["language"]` exists but is unreliable
-        if not is_en(prompt):
-            continue
+    if not is_en(prompt):
+        return None
 
-        code_blocks = extract_code_blocks(response)
-        if code_blocks and any(is_nontriv(b) for b in code_blocks):
-            idee = f"{row['conversation_id']}:{turn_idx}"
-            records.append(
-                {
-                    "id": idee,
-                    "model": row["model"],
-                    "prompt": prompt,
-                    "response": response,
-                    "code": code_blocks,
-                    "prev_turn_id": prev_turn_id,
-                }
-            )
-            prev_turn_id = idee
+    code_blocks = extract_code_blocks(response)
+    if not code_blocks or not any(is_nontriv(b) for b in code_blocks):
+        return None
 
-    return records
+    return {
+        "id": row["conversation_id"],
+        "model": row["model"],
+        "prompt": prompt,
+        "response": response,
+        "code": code_blocks,
+    }
 
 
 def filter_rows(ds: Dataset, /) -> pd.DataFrame:
@@ -103,15 +96,16 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
     max_workers = max((os.cpu_count() or 4) // 2, 1)
     extra = (
         f"\n  [bold green]>[/] [dim]English prompts & Python code[/]"
+        f"\n  [bold green]>[/] [dim]Only using first prompt/code in conversation[/]"
         f"\n  [bold green]>[/] [dim]{max_workers} workers[/]\n"
     )
     sem = Semaphore(max_workers * 2)
 
-    def _submit(pool: ThreadPoolExecutor, row: object) -> Future[list[FilteredDSRow]]:
+    def _submit(pool: ThreadPoolExecutor, row: object) -> Future[FilteredDSRow | None]:
         sem.acquire()
         return pool.submit(_work, row)
 
-    def _work(row: object) -> list[FilteredDSRow]:
+    def _work(row: object) -> FilteredDSRow | None:
         try:
             return process_conversation(cast("DSRow", row))
         finally:
@@ -121,7 +115,9 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
         futures = (_submit(pool, row) for row in ds)  # lazy generator
         records: list[FilteredDSRow] = []
         for _, future in tracked(futures, "Filtering", total=total, extra=extra):
-            records.extend(future.result())
+            result = future.result()
+            if result is not None:
+                records.append(result)
 
     df = pd.DataFrame(records)
     cout(f"[bold green]>[/] Filtered to {len(df):,} turns from {len(ds):,} conversations\n")
