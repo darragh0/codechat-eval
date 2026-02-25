@@ -129,6 +129,8 @@ def score_row(client: ollama.Client, row: SyntaxEvalRow) -> dict:
             {"role": "user", "content": f"PROMPT:\n{row['prompt']}\n\nCODE:\n{row['code']}"},
         ],
     )
+
+    cout(resp)
     return extract_json(resp.message.content)
 
 
@@ -148,7 +150,8 @@ def process_row(client: ollama.Client, row: SyntaxEvalRow) -> SemanticEvalRow:
             raise
         missing = set(DIMENSIONS) - raw.keys()
         if missing:
-            raise ValueError(f"Row {row['id']}: missing {sorted(missing)} after retry. Got: {raw}")
+            msg = f"Row {row['id']}: missing {sorted(missing)} after retry. Got: {raw}"
+            raise ValueError(msg)
 
     return cast(
         "SemanticEvalRow",
@@ -186,8 +189,8 @@ def show_oview(df: pd.DataFrame) -> None:
         cout(f"  [dim]{col:<20}[/] mean={mean:.2f}  median={med:.2f}")
 
 
-def analyse_semantics(df: pd.DataFrame, /) -> pd.DataFrame:
-    """Run LLM-as-a-judge semantic analysis on each row after syntax analysis."""
+def analyse_semantics(df: pd.DataFrame) -> pd.DataFrame:
+    """Run LLM-as-a-judge semantic analysis on each row."""
 
     cache_path = CACHE_DIR / "semantic_eval.parquet"
     checkpoint_path = CACHE_DIR / "semantic_eval.checkpoint.jsonl"
@@ -225,7 +228,7 @@ def main() -> None:
     syntax_fname = "syntax_eval.parquet"
     cache_path = CACHE_DIR / syntax_fname
     if not cache_path.exists():
-        cerr(f"run [cyan]syntax.py[/] first -- missing [cyan]{syntax_fname}[/]")
+        cerr(f"run [cyan]03_syntax.py[/] first -- missing [cyan]{syntax_fname}[/]")
 
     df = pd.read_parquet(cache_path)
     analyse_semantics(df)

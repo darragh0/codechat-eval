@@ -171,13 +171,12 @@ def analyse_syntax(df: pd.DataFrame, /) -> pd.DataFrame:
     def compute() -> pd.DataFrame:
         rows = cast("list[FilteredDSRow]", df.to_dict("records"))
         max_workers = max((os.cpu_count() or 4) // 2, 1)
-        extra = f"\n  [bold green]>[/] [dim]{max_workers} workers[/]\n"
 
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(process_syntax_row, row) for row in rows]
             records: list[SyntaxEvalRow] = []
             try:
-                for _, fut in tracked(futures, "Analysing syntax", total=len(rows), extra=extra):
+                for _, fut in tracked(futures, "Analysing syntax", total=len(rows)):
                     records.append(fut.result())
             except KeyboardInterrupt:
                 for f in futures:
@@ -186,6 +185,7 @@ def analyse_syntax(df: pd.DataFrame, /) -> pd.DataFrame:
                 raise
 
         records.sort(key=lambda r: r["id"])
+        cout()
         return pd.DataFrame(records)
 
     cache_path = CACHE_DIR / "syntax_eval.parquet"
@@ -204,7 +204,7 @@ def main() -> None:
     filtered_fname = "filtered.parquet"
     cache_path = CACHE_DIR / filtered_fname
     if not cache_path.exists():
-        cerr(f"run [cyan]filter.py[/] first -- missing [cyan]{filtered_fname}[/]")
+        cerr(f"run [cyan]02_filter.py[/] first -- missing [cyan]{filtered_fname}[/]")
 
     df = pd.read_parquet(cache_path)
     analyse_syntax(df)

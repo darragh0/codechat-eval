@@ -25,15 +25,12 @@ def tracked[T](
     *,
     total: int,
     completed: int = 0,
-    extra: str = "",
 ) -> Iterator[tuple[int, T]]:
     """Enumerate items with a rich progress bar + ETA."""
-    if extra:
-        cout(extra.strip())
 
     with Progress(
-        SpinnerColumn("dots"),
-        TextColumn("[dim]{task.description}[/]"),
+        SpinnerColumn("flip"),
+        TextColumn("{task.description}"),
         BarColumn(),
         MofNCompleteColumn(),
         TimeRemainingColumn(),

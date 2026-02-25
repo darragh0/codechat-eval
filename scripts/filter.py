@@ -94,12 +94,13 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
     """Filter all rows in the dataset with progress tracking."""
     total = len(ds)
     max_workers = max((os.cpu_count() or 4) // 2, 1)
-    extra = (
-        f"\n  [bold green]>[/] [dim]English prompts & Python code[/]"
-        f"\n  [bold green]>[/] [dim]Only using first prompt/code in conversation[/]"
-        f"\n  [bold green]>[/] [dim]{max_workers} workers[/]\n"
-    )
     sem = Semaphore(max_workers * 2)
+
+    cout(
+        f"[bold green]>[/] English prompts & Python code\n"
+        f"[bold green]>[/] Single turn conversations\n"
+        f"[bold green]>[/] {max_workers} workers[/]\n"
+    )
 
     def _submit(pool: ThreadPoolExecutor, row: object) -> Future[FilteredDSRow | None]:
         sem.acquire()
@@ -115,7 +116,7 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
         futures = (_submit(pool, row) for row in ds)  # lazy generator
         records: list[FilteredDSRow] = []
         try:
-            for _, future in tracked(futures, "Filtering", total=total, extra=extra):
+            for _, future in tracked(futures, "Filtering", total=total):
                 result = future.result()
                 if result is not None:
                     records.append(result)
@@ -123,14 +124,11 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
             pool.shutdown(wait=False, cancel_futures=True)
             raise
 
-    df = pd.DataFrame(records)
-    cout(f"[bold green]>[/] Filtered to {len(df):,} turns from {len(ds):,} conversations\n")
-    return df
+    cout()
+    return pd.DataFrame(records)
 
 
 def filter_ds(ds: Dataset, /) -> pd.DataFrame:
-    """Filter dataset and return as DataFrame. Uses cache if available."""
-
     cache_path = CACHE_DIR / "filtered.parquet"
     df = parquet_cache(cache_path, lambda: filter_rows(ds))
     cout()
