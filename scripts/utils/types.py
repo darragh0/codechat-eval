@@ -78,6 +78,7 @@ class CodeSemEval(TypedDict):
     correctness: CodeSemScore
     robustness: CodeSemScore
     readability: CodeSemScore
+    efficiency: CodeSemScore
 
 
 class SyntaxEvalRow(EvalRowBase, SyntaxEval):

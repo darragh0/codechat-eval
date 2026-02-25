@@ -114,10 +114,14 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = (_submit(pool, row) for row in ds)  # lazy generator
         records: list[FilteredDSRow] = []
-        for _, future in tracked(futures, "Filtering", total=total, extra=extra):
-            result = future.result()
-            if result is not None:
-                records.append(result)
+        try:
+            for _, future in tracked(futures, "Filtering", total=total, extra=extra):
+                result = future.result()
+                if result is not None:
+                    records.append(result)
+        except KeyboardInterrupt:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
 
     df = pd.DataFrame(records)
     cout(f"[bold green]>[/] Filtered to {len(df):,} turns from {len(ds):,} conversations\n")

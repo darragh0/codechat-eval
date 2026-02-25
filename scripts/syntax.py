@@ -176,8 +176,14 @@ def analyse_syntax(df: pd.DataFrame, /) -> pd.DataFrame:
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(process_syntax_row, row) for row in rows]
             records: list[SyntaxEvalRow] = []
-            for _, fut in tracked(futures, "Analysing syntax", total=len(rows), extra=extra):
-                records.append(fut.result())
+            try:
+                for _, fut in tracked(futures, "Analysing syntax", total=len(rows), extra=extra):
+                    records.append(fut.result())
+            except KeyboardInterrupt:
+                for f in futures:
+                    f.cancel()
+                pool.shutdown(wait=False, cancel_futures=True)
+                raise
 
         records.sort(key=lambda r: r["id"])
         return pd.DataFrame(records)

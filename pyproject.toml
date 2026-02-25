@@ -15,6 +15,7 @@ dependencies = [
   "annotated-types>=0.7.0",
   "datasets>=4.5.0",
   "fasttext-predict>=0.9.2.4",
+  "ollama>=0.5.0",
   "pandas>=2.0.0",
   "radon>=6.0.0",
   "rich>=14.3.1",
