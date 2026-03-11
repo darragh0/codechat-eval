@@ -1,4 +1,4 @@
-"""Console printing (shorthands for `cout.print` and `cerr.print`)."""
+"""Console printing (shorthands for `cout.print` & `cerr.print`)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from rich.style import Style
 
 
-class RichConsolePrintKwargs(TypedDict, total=False):
+class _RichConsolePrintKwargs(TypedDict, total=False):
     """Typed keyword arguments for `rich.console.print`."""
 
     sep: str
@@ -35,7 +35,7 @@ class _Console(Console):
     def __call__(
         self,
         *objects: Any,  # noqa: ANN401
-        **kwargs: Unpack[RichConsolePrintKwargs],
+        **kwargs: Unpack[_RichConsolePrintKwargs],
     ) -> None:
         self.print(*objects, **kwargs)
 
@@ -46,7 +46,7 @@ class _ErrConsole(Console):
         *objects: Any,  # noqa: ANN401
         exit_code: int | None = None,
         prefix: str = "[bold red]error:[/]",
-        **kwargs: Unpack[RichConsolePrintKwargs],
+        **kwargs: Unpack[_RichConsolePrintKwargs],
     ) -> None:
         self.print(prefix, *objects, **kwargs)
 

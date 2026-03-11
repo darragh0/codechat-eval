@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 
-"""Dataset filtering (only English prompts with Python code)."""
+"""Dataset filtering (only single-turn conversations & English prompts with Python code)."""
 
 from __future__ import annotations
 
-import functools
-import os
 import re
-import urllib.request
 from concurrent.futures import Future, ThreadPoolExecutor
+from functools import cache
+from os import cpu_count
 from threading import Semaphore
 from typing import TYPE_CHECKING, Final, cast
+from urllib.request import urlretrieve
 
-import fasttext
-import pandas as pd
 from datasets import Dataset
 from download import load_ds
+from fasttext import FastText
+from fasttext import load_model as load_fasttext_model
+from pandas import DataFrame
 from utils.cache import CACHE_DIR, parquet_cache
 from utils.console import cout
 from utils.display import show_df_overview
@@ -23,36 +24,35 @@ from utils.progress import tracked
 
 if TYPE_CHECKING:
     from datasets import Dataset
-    from utils.types import DSRow
+    from utils.types import DSRow, FilteredDSRow, Uint
 
-    from scripts.utils.types import FilteredDSRow
 
 LANGS: Final = ("python", "py")
 LANG_MODEL_PATH: Final = CACHE_DIR / "lid.176.ftz"
 
 
-@functools.cache
-def get_lang_model() -> fasttext.FastText._FastText:
+@cache
+def get_lang_model() -> FastText._FastText:
     if not LANG_MODEL_PATH.exists():
         LANG_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-        urllib.request.urlretrieve(
+        urlretrieve(
             "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz",
             str(LANG_MODEL_PATH),
         )
-    return fasttext.load_model(str(LANG_MODEL_PATH))
+    return load_fasttext_model(str(LANG_MODEL_PATH))
 
 
-def extract_code_blocks(md: str, /) -> list[str]:
+def extract_md_code_blocks(md: str, /) -> list[str]:
     pattern = rf"```(?:{'|'.join(LANGS)})\n(.*?)```"
     return re.findall(pattern, md, re.DOTALL | re.IGNORECASE)
 
 
-def is_nontriv(code: str, /, *, min_lines: int = 5) -> bool:
+def is_nontriv_code(code: str, /, *, min_lines: Uint = 5) -> bool:
     lines = [ln for ln in code.splitlines() if ln.strip() and not ln.strip().startswith("#")]
     return len(lines) > min_lines
 
 
-def is_en(text: str, /) -> bool:
+def is_en_txt(text: str, /) -> bool:
     """Check if text is English using fasttext."""
     model = get_lang_model()
     text = text.replace("\n", " ")
@@ -60,8 +60,8 @@ def is_en(text: str, /) -> bool:
     return predictions[0][0] == "__label__en"  # type: ignore[reportGeneralTypeIssues]
 
 
-def process_conversation(row: DSRow, /) -> FilteredDSRow | None:
-    """Extract the first turn if it has English prompt + non-trivial code."""
+def process_convo(row: DSRow, /) -> FilteredDSRow | None:
+    """Extract first turn if it has English prompt + non-trivial code."""
 
     conversation = row["conversation"]
     if not conversation or len(conversation[0]) < 2:  # noqa: PLR2004
@@ -74,11 +74,11 @@ def process_conversation(row: DSRow, /) -> FilteredDSRow | None:
     if user_msg["role"] != "user" or asst_msg["role"] != "assistant" or not prompt or not response:
         return None
 
-    if not is_en(prompt):
+    if not is_en_txt(prompt):
         return None
 
-    code_blocks = extract_code_blocks(response)
-    if not code_blocks or not any(is_nontriv(b) for b in code_blocks):
+    code_blocks = extract_md_code_blocks(response)
+    if not code_blocks or not any(is_nontriv_code(b) for b in code_blocks):
         return None
 
     return {
@@ -90,17 +90,10 @@ def process_conversation(row: DSRow, /) -> FilteredDSRow | None:
     }
 
 
-def filter_rows(ds: Dataset, /) -> pd.DataFrame:
-    """Filter all rows in the dataset with progress tracking."""
+def filter_rows(ds: Dataset, /) -> DataFrame:
     total = len(ds)
-    max_workers = max((os.cpu_count() or 4) // 2, 1)
+    max_workers = max((cpu_count() or 4) // 2, 1)
     sem = Semaphore(max_workers * 2)
-
-    cout(
-        f"[bold green]>[/] English prompts & Python code\n"
-        f"[bold green]>[/] Single turn conversations\n"
-        f"[bold green]>[/] {max_workers} workers[/]\n"
-    )
 
     def _submit(pool: ThreadPoolExecutor, row: object) -> Future[FilteredDSRow | None]:
         sem.acquire()
@@ -108,7 +101,7 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
 
     def _work(row: object) -> FilteredDSRow | None:
         try:
-            return process_conversation(cast("DSRow", row))
+            return process_convo(cast("DSRow", row))
         finally:
             sem.release()
 
@@ -124,12 +117,13 @@ def filter_rows(ds: Dataset, /) -> pd.DataFrame:
             pool.shutdown(wait=False, cancel_futures=True)
             raise
 
-    cout()
-    return pd.DataFrame(records)
+    return DataFrame(records)
 
 
-def filter_ds(ds: Dataset, /) -> pd.DataFrame:
+def filter_ds(ds: Dataset, /) -> DataFrame:
     cache_path = CACHE_DIR / "filtered.parquet"
+    cout("Keeping:\n  [bold green]>[/] English prompts & Python code\n  [bold green]>[/] Single-turn conversations\n")
+
     df = parquet_cache(cache_path, lambda: filter_rows(ds))
     cout()
 

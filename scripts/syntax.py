@@ -6,13 +6,13 @@ from __future__ import annotations
 
 import ast
 import json
-import os
-import shutil
-import subprocess
-import tempfile
+import subprocess as sp
 import warnings
 from concurrent.futures import ProcessPoolExecutor
+from os import cpu_count
 from pathlib import Path
+from shutil import which
+from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, cast
 
 import pandas as pd
@@ -22,14 +22,14 @@ from utils.cache import CACHE_DIR, parquet_cache
 from utils.console import cerr, cout
 from utils.display import show_df_overview
 from utils.progress import tracked
-from utils.types import SyntaxEval
+from utils.types import SyntaxEval, Uint
 
 if TYPE_CHECKING:
     from scripts.utils.types import FilteredDSRow, SyntaxEvalRow
 
 
 def is_parseable(blocks: list[str]) -> bool:
-    """Check if all code blocks parse via ast.parse."""
+    """Check if all code blocks parse (with `ast.parse`)."""
     for block in blocks:
         try:
             with warnings.catch_warnings():
@@ -40,23 +40,23 @@ def is_parseable(blocks: list[str]) -> bool:
     return True
 
 
-def run_ruff(code: str) -> dict[str, int]:
-    """Run ruff on code and return violation counts by category."""
+def run_ruff(code: str) -> dict[str, Uint]:
+    """Run ruff on code; return violation counts by category."""
     counts = {"errors": 0, "warnings": 0, "flake8": 0, "bugbear": 0, "security": 0}
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+    with NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write(code)
         f.flush()
         tmp = f.name
 
-    ruff = shutil.which("ruff")
+    ruff = which("ruff")
     if not ruff:
-        cerr("ruff not found in PATH -- see https://docs.astral.sh/ruff/installation/\n")
+        cerr("[cyan]ruff[/] not found in [cyan]$PATH[/] -- see https://docs.astral.sh/ruff/installation/\n")
         emsg = "missing ruff executable"
         raise RuntimeError(emsg)
 
     try:
-        result = subprocess.run(  # noqa: S603
+        result = sp.run(  # noqa: S603
             [
                 ruff,
                 "check",
@@ -115,7 +115,7 @@ def run_radon_mi(code: str) -> float:
 
 
 def analyse_row(code_blocks: list[str]) -> SyntaxEval:
-    """Analyse code blocks and return flat score dict."""
+    """Analyse code blocks & return flat score dict."""
     parseable = is_parseable(code_blocks)
     combined = "\n\n# ===== CODEBLOCK =====\n\n".join(code_blocks)
 
@@ -170,13 +170,13 @@ def analyse_syntax(df: pd.DataFrame, /) -> pd.DataFrame:
 
     def compute() -> pd.DataFrame:
         rows = cast("list[FilteredDSRow]", df.to_dict("records"))
-        max_workers = max((os.cpu_count() or 4) // 2, 1)
+        max_workers = max((cpu_count() or 4) // 2, 1)
 
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = [pool.submit(process_syntax_row, row) for row in rows]
             records: list[SyntaxEvalRow] = []
             try:
-                for _, fut in tracked(futures, "Analysing syntax", total=len(rows)):
+                for _, fut in tracked(futures, "Analyzing syntax", total=len(rows)):
                     records.append(fut.result())
             except KeyboardInterrupt:
                 for f in futures:
@@ -204,7 +204,7 @@ def main() -> None:
     filtered_fname = "filtered.parquet"
     cache_path = CACHE_DIR / filtered_fname
     if not cache_path.exists():
-        cerr(f"run [cyan]02_filter.py[/] first -- missing [cyan]{filtered_fname}[/]")
+        cerr(f"run [cyan]scripts/filter.py[/] first -- missing [cyan]{filtered_fname}[/]", exit_code=1)
 
     df = pd.read_parquet(cache_path)
     analyse_syntax(df)

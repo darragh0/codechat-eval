@@ -1,16 +1,21 @@
-from collections.abc import Iterator
-from datetime import datetime as dt
-from typing import Annotated, Literal, TypedDict, cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, cast
 
 from annotated_types import Ge, Le
-from datasets import Dataset
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from datetime import datetime as dt
+
+    from datasets import Dataset
+
 
 Uint = Annotated[int, Ge(0)]
 Ufloat = Annotated[float, Ge(0.0)]
 ChatRole = Literal["user", "assistant"]
 Percent = Annotated[float, Ge(0.0), Le(100.0)]
-PromptSemScore = Annotated[int, Ge(1), Le(5)]
-CodeSemScore = PromptSemScore
+One2Five = Annotated[int, Ge(1), Le(5)]
 
 
 def rows_as[T](ds: Dataset, _: type[T], /) -> Iterator[T]:
@@ -69,16 +74,16 @@ class SyntaxEval(TypedDict):
 
 
 class PromptSemEval(TypedDict):
-    clarity: PromptSemScore
-    specificity: PromptSemScore
-    completeness: PromptSemScore
+    clarity: One2Five
+    specificity: One2Five
+    completeness: One2Five
 
 
 class CodeSemEval(TypedDict):
-    correctness: CodeSemScore
-    robustness: CodeSemScore
-    readability: CodeSemScore
-    efficiency: CodeSemScore
+    correctness: One2Five
+    robustness: One2Five
+    readability: One2Five
+    efficiency: One2Five
 
 
 class SyntaxEvalRow(EvalRowBase, SyntaxEval):

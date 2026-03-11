@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Load the dataset from huggingface."""
+"""Load/Download dataset from huggingface."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Final
 from datasets import List, Value, load_dataset
 from utils.cache import CACHE_DIR
 from utils.console import cout
-from utils.display import maxlen, prettypath
+from utils.display import pretty_path
 
 if TYPE_CHECKING:
     from datasets import Dataset
@@ -39,12 +39,14 @@ def inner_fields(feat: List | Value | dict) -> dict | None:
 def show_oview(ds: Dataset, ds_name: str) -> None:
     """Show original dataset overview."""
 
+    location = pretty_path(CACHE_DIR / f"{ds_name}.parquet")
+
     cout(f"[dim]Dataset[/]    {ds_name!r}")
-    location = prettypath(CACHE_DIR / f"{ds_name}.parquet")
     cout(f"[dim]Location[/]   {location}")
     cout(f"[dim]Rows[/]       {len(ds):,}")
     cout("\n[dim]Features[/]")
 
+    maxlen = lambda s: len(max(s, key=len))  # noqa: E731
     w = maxlen(ds.features)
     zpad = len(str(len(ds.features)))
 
